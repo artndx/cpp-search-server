@@ -61,17 +61,10 @@ public:
     void AddDocument(int document_id, const string& document_string) {
         if (!document_string.empty()) {
             const vector<string> document = SplitIntoWordsNoStop(document_string);
-            double TF = 0.;
-            double word_count = 0.;
+            double size = 1. / document.size();
             for (string word : document) {
-
-                word_count = count_if(document.begin(), document.end(),
-                    [&word](const string& s) {
-                    return s == word; });
-                TF = word_count / document.size();
-                documents_[word].insert({ document_id, TF });
+                documents_[word][document_id] += size;
             }
-            TF = 0.;
             ++document_count_;
         }
     }
@@ -104,7 +97,10 @@ private:
     bool IsStopWord(const string& word) const {
         return stop_words_.count(word) > 0;
     }
-
+    double GetIDF(const string& word) const {
+        return log(static_cast<double>(document_count_) /
+            static_cast<double>(documents_.at(word).size()));
+    }
     vector<string> SplitIntoWordsNoStop(const string& text) const {
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
@@ -136,8 +132,7 @@ private:
         for (const auto& plus_word : query_words.plus_words) {
             double IDF = 0.;
             if (documents_.count(plus_word)) {
-                IDF = log(static_cast<double>(document_count_) / 
-                    static_cast<double>(documents_.at(plus_word).size()));
+                IDF = GetIDF(plus_word);
             }
             else {
                 continue;
