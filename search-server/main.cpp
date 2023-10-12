@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 #include <optional>
+#include <numeric>
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
@@ -84,17 +85,15 @@ public:
     explicit SearchServer(const StringContainer& stop_words)
         : stop_words_(MakeUniqueNonEmptyStrings(stop_words)) {
         for(const string& word : stop_words_){
-            if(!IsValidWord(word)){throw invalid_argument("Invalid chars in stop words");}
+            if(!IsValidWord(word)){
+                throw invalid_argument("Invalid chars in stop words");
+            }
         }
     }
 
     explicit SearchServer(const string& stop_words_text)
-        : SearchServer(
-            SplitIntoWords(stop_words_text))  // Invoke delegating constructor from string container
+        : SearchServer(SplitIntoWords(stop_words_text))  // Invoke delegating constructor from string container
     {
-        for(const string& word : stop_words_){
-            if(!IsValidWord(word)){throw invalid_argument("Invalid chars in stop words");}
-        }
     }
 
     void AddDocument(int document_id, const string& document, DocumentStatus status,
@@ -136,11 +135,11 @@ public:
         
         sort(matched_documents.begin(), matched_documents.end(),
              [](const Document& lhs, const Document& rhs) {
-                 if (abs(lhs.relevance - rhs.relevance) < 1e-6) {
+                if (abs(lhs.relevance - rhs.relevance) < numeric_limits<double>::epsilon()) {
                      return lhs.rating > rhs.rating;
-                 } else {
-                     return lhs.relevance > rhs.relevance;
-                 }
+                }
+                return lhs.relevance > rhs.relevance;
+                
              });
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
             matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
@@ -166,9 +165,7 @@ public:
 
     tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
         const Query query = ParseQuery(raw_query);
-        if (!QueryIsCorrect(query)) {
-            throw invalid_argument("Invalid query");
-        }
+        
         vector<string> matched_words;
         for (const string& word : query.plus_words) {
             if (word_to_document_freqs_.count(word) == 0) {
@@ -216,6 +213,9 @@ private:
         vector<string> words;
         for (const string& word : SplitIntoWords(text)) {
             if (!IsStopWord(word)) {
+                if(!IsValidWord(word)){
+                    throw invalid_argument("Invalid word");
+                }
                 words.push_back(word);
             }
         }
@@ -226,10 +226,7 @@ private:
         if (ratings.empty()) {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings) {
-            rating_sum += rating;
-        }
+        int rating_sum = accumulate(ratings.begin(),ratings.end(),0);
         return rating_sum / static_cast<int>(ratings.size());
     }
 
@@ -268,6 +265,9 @@ private:
                     query.plus_words.insert(query_word.data);
                 }
             }
+        }
+        if (!QueryIsCorrect(query)) {
+            throw invalid_argument("Invalid query");
         }
         return query;
     }
